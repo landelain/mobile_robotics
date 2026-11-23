@@ -97,6 +97,7 @@ def path_search(nodes, neighbors, distance, start=0, goal=1):
                 path.append(current)
             for i in range(operation_count-1):
                 path_coords.append(nodes[path[i]])
+                path_coords.reverse()
             return path[::-1], g[goal], explored, operation_count, path_coords
 
         for nb in neighbors[current]:
