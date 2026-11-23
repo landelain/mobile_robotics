@@ -9,6 +9,19 @@ boundary = [(0, 0),
             (1085, 745), 
             (0, 745)]
 
+# runs Global Navigation
+def run_global_nav(start, goal, raw_obstacles):
+    obstacles = grow_obstacles(raw_obstacles, 115)
+    nodes = np.array([start, goal] + [v for ob in obstacles for v in ob])
+    neighbors = plot_path_options(nodes, boundary, obstacles)
+    distance = map_distances(nodes)
+    heuristic = calc_heuristic(nodes)
+    path, cost, explored, ops, coords = path_search(nodes, neighbors, distance)
+
+    plot_route(path, obstacles, start, goal, nodes, boundary)
+    return path, coords
+
+# adds buffer to obstacles
 def grow_obstacles(obstacles, pad):
     grown = []
     for ob in obstacles:
@@ -16,25 +29,7 @@ def grow_obstacles(obstacles, pad):
         grown.append(list(poly.exterior.coords)[:-1])   # drop the repeated closing point
     return grown
 
-def plot_visibility_graph(obstacles, start, goal, boundary):
-    fig, ax = plt.subplots(figsize=(7, 7))
-
-    # 1. obstacles, straight from the vertex lists
-    for verts in obstacles:
-        ax.add_patch(MplPolygon(verts, closed=True,
-                                facecolor="lightgray", edgecolor="black"))
-        
-    ax.add_patch(MplPolygon(boundary, closed=True, fill=False, edgecolor="black"))
-
-    ax.scatter(*start, s=80, color="green", zorder=4, label="start")
-    ax.scatter(*goal, s=80, color="orange", zorder=4, label="goal")
-    
-
-    ax.set_aspect("equal")        # keeps angles and lengths undistorted
-    ax.autoscale_view()
-    ax.legend()
-    ax.set_xlabel("x"); ax.set_ylabel("y")
-
+# determines if a path segment is valid 
 def is_visible(a, b, obstacles, boundary):
     seg = LineString([a, b])
     polys = [Polygon(v) for v in obstacles]
@@ -50,20 +45,7 @@ def is_visible(a, b, obstacles, boundary):
             return False
     return True
 
-def plot_path_options(nodes, boundary, obstacles):
-    num_nodes = len(nodes)
-    neighbors = [[] for _ in range(num_nodes)]
-
-    for i in range(num_nodes):
-        for j in range(i + 1, num_nodes):
-            if is_visible(nodes[i, :], nodes[j, :], obstacles, boundary):
-                neighbors[i].append(j)
-                neighbors[j].append(i)
-                plt.plot([nodes[i, 0], nodes[j, 0]],
-                     [nodes[i, 1], nodes[j, 1]],
-                     color="tab:blue", linewidth=0.5, alpha=0.5)
-    return neighbors
-
+# calculates distance between nodes
 def map_distances(nodes):
     num_nodes = nodes.shape[0]
     distance = np.zeros((num_nodes, num_nodes))
@@ -76,6 +58,7 @@ def map_distances(nodes):
                 distance[i, j] = 0
     return distance 
 
+# calculates heuristic function for A*
 def calc_heuristic(nodes):
     num_nodes = nodes.shape[0]
     heuristic = np.zeros(num_nodes)
@@ -83,6 +66,7 @@ def calc_heuristic(nodes):
         heuristic[i] = np.linalg.norm(nodes[i] - nodes[2], ord=2)
     return heuristic
 
+# finds optimal path using A*
 def path_search(nodes, neighbors, distance, start=0, goal=1):
     nodes = np.asarray(nodes)
     goal_pos = nodes[goal]
@@ -126,6 +110,7 @@ def path_search(nodes, neighbors, distance, start=0, goal=1):
 
     return None, float("inf"), explored, operation_count   # no path found
 
+# plots final path
 def plot_route(path, obstacles, start, goal, nodes, boundary):
     plot_visibility_graph(obstacles, start, goal, boundary)
     print(len(path))
@@ -133,3 +118,38 @@ def plot_route(path, obstacles, start, goal, nodes, boundary):
         plt.plot([nodes[path[i], 0], nodes[path[i+1], 0]],
                      [nodes[path[i], 1], nodes[path[i+1], 1]],
                      color="tab:red", linewidth=0.5, alpha=0.5)
+
+# plots all possible path segments      
+def plot_path_options(nodes, boundary, obstacles):
+    num_nodes = len(nodes)
+    neighbors = [[] for _ in range(num_nodes)]
+
+    for i in range(num_nodes):
+        for j in range(i + 1, num_nodes):
+            if is_visible(nodes[i, :], nodes[j, :], obstacles, boundary):
+                neighbors[i].append(j)
+                neighbors[j].append(i)
+                plt.plot([nodes[i, 0], nodes[j, 0]],
+                     [nodes[i, 1], nodes[j, 1]],
+                     color="tab:blue", linewidth=0.5, alpha=0.5)
+    return neighbors
+
+#plots initial visibility graph
+def plot_visibility_graph(obstacles, start, goal, boundary):
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    # 1. obstacles, straight from the vertex lists
+    for verts in obstacles:
+        ax.add_patch(MplPolygon(verts, closed=True,
+                                facecolor="lightgray", edgecolor="black"))
+        
+    ax.add_patch(MplPolygon(boundary, closed=True, fill=False, edgecolor="black"))
+
+    ax.scatter(*start, s=80, color="green", zorder=4, label="start")
+    ax.scatter(*goal, s=80, color="orange", zorder=4, label="goal")
+    
+
+    ax.set_aspect("equal")        # keeps angles and lengths undistorted
+    ax.autoscale_view()
+    ax.legend()
+    ax.set_xlabel("x"); ax.set_ylabel("y")
