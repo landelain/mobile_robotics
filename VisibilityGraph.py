@@ -15,7 +15,6 @@ def run_global_nav(start, goal, raw_obstacles):
     nodes = np.array([start, goal] + [v for ob in obstacles for v in ob])
     neighbors = plot_path_options(nodes, boundary, obstacles)
     distance = map_distances(nodes)
-    heuristic = calc_heuristic(nodes)
     path, cost, explored, ops, coords = path_search(nodes, neighbors, distance)
 
     plot_route(path, obstacles, start, goal, nodes, boundary)
@@ -58,14 +57,6 @@ def map_distances(nodes):
                 distance[i, j] = 0
     return distance 
 
-# calculates heuristic function for A*
-def calc_heuristic(nodes):
-    num_nodes = nodes.shape[0]
-    heuristic = np.zeros(num_nodes)
-    for i in range(num_nodes):
-        heuristic[i] = np.linalg.norm(nodes[i] - nodes[2], ord=2)
-    return heuristic
-
 # finds optimal path using A*
 def path_search(nodes, neighbors, distance, start=0, goal=1):
     nodes = np.asarray(nodes)
@@ -91,14 +82,12 @@ def path_search(nodes, neighbors, distance, start=0, goal=1):
 
         if current == goal:
             path = [current]
-            path_coords = []
             while current in came_from:
                 current = came_from[current]
                 path.append(current)
-            for i in range(operation_count-1):
-                path_coords.append(nodes[path[i]])
-                path_coords.reverse()
-            return path[::-1], g[goal], explored, operation_count, path_coords
+            path.reverse()                         # start -> goal
+            path_coords = [nodes[n] for n in path]
+            return path, g[goal], explored, operation_count, path_coords
 
         for nb in neighbors[current]:
             if nb in closed:
@@ -109,7 +98,7 @@ def path_search(nodes, neighbors, distance, start=0, goal=1):
                 came_from[nb] = current
                 heapq.heappush(open_heap, (tentative + h(nb), nb))
 
-    return None, float("inf"), explored, operation_count   # no path found
+    return None, float("inf"), explored, operation_count, None   # no path found
 
 # plots final path
 def plot_route(path, obstacles, start, goal, nodes, boundary):
