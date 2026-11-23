@@ -1,22 +1,9 @@
-## Visibility Graph
-## Natalie Dell'Immagine
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as MplPolygon
 from shapely.geometry import LineString, Polygon
 import heapq
 
-ob1 = [(176, 206), (215, 217), (194, 294), (155, 283)]
-ob2 = [(522, 440), (562, 440), (562, 520), (522, 520)]
-ob3 = [(870, 267), (909, 256), (930, 333), (891, 344)]
-
-start = (1, 1)
-goal = (1000, 700)
-raw_obstacles = (ob1, ob2, ob3)
-# start is Node 0, goal is Node 1, everything else are the vertices
-# nodes = [start, goal] + ob1 + ob2 + ob3
-# nodes = np.array(nodes) 
 boundary = [(0, 0),
             (1085, 0),
             (1085, 745), 
@@ -63,7 +50,7 @@ def is_visible(a, b, obstacles, boundary):
             return False
     return True
 
-def plot_path_options(nodes, bounday):
+def plot_path_options(nodes, boundary, obstacles):
     num_nodes = len(nodes)
     neighbors = [[] for _ in range(num_nodes)]
 
@@ -120,10 +107,13 @@ def path_search(nodes, neighbors, distance, start=0, goal=1):
 
         if current == goal:
             path = [current]
+            path_coords = []
             while current in came_from:
                 current = came_from[current]
                 path.append(current)
-            return path[::-1], g[goal], explored, operation_count
+            for i in range(operation_count-1):
+                path_coords.append(nodes[path[i]])
+            return path[::-1], g[goal], explored, operation_count, path_coords
 
         for nb in neighbors[current]:
             if nb in closed:
@@ -143,16 +133,3 @@ def plot_route(path, obstacles, start, goal, nodes, boundary):
         plt.plot([nodes[path[i], 0], nodes[path[i+1], 0]],
                      [nodes[path[i], 1], nodes[path[i+1], 1]],
                      color="tab:red", linewidth=0.5, alpha=0.5)
-    
-obstacles = grow_obstacles(raw_obstacles, 115)
-nodes = np.array([start, goal] + [v for ob in obstacles for v in ob])
-#obstacles = raw_obstacles
-plot_visibility_graph(obstacles, start, goal, boundary)
-neighbors = plot_path_options(nodes, boundary)
-distance = map_distances(nodes)
-heuristic = calc_heuristic(nodes)
-path, cost, explored, ops = path_search(nodes, neighbors, distance)
-print(path, cost)
-plt.show()
-
-plot_route(path, obstacles, start, goal, nodes, boundary)
