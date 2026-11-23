@@ -99,7 +99,7 @@ class LocalNavigationController:
                 command = (-TURN_SPEED, TURN_SPEED)
             else:
                 command = (TURN_SPEED, -TURN_SPEED)
-
+            
         elif self.state == NavigationState.FOLLOW_BOUNDARY:
 
             side_sensor = (
@@ -107,23 +107,32 @@ class LocalNavigationController:
                 else left_side
             )
 
-            # Proportional adjustment around a target sensor value
-            error = SIDE_TARGET - side_sensor
-            correction = max(-30, min(30, 0.02 * error))
+            # No side obstacle detected: move forward cautiously
+            if side_sensor < 300:
+                command = (BASE_SPEED, BASE_SPEED)
 
-            if abs(error) < SIDE_TOLERANCE:
-                correction = 0
-
-            if self.boundary_side == "right":
-                command = (
-                    BASE_SPEED + correction,
-                    BASE_SPEED - correction
-                )
             else:
-                command = (
-                    BASE_SPEED - correction,
-                    BASE_SPEED + correction
+                error = SIDE_TARGET - side_sensor
+
+                correction = max(
+                    -30,
+                    min(30, 0.02 * error)
                 )
+
+                if abs(error) < SIDE_TOLERANCE:
+                    correction = 0
+
+                if self.boundary_side == "right":
+                    command = (
+                        BASE_SPEED + correction,
+                        BASE_SPEED - correction
+                    )
+                else:
+                    command = (
+                        BASE_SPEED - correction,
+                        BASE_SPEED + correction
+                    )
+
 
         elif self.state == NavigationState.RETURN_TO_PATH:
 

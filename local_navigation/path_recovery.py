@@ -79,6 +79,48 @@ def reached_rejoin_point(robot_pose, target, tolerance=0.08):
     return distance < tolerance
 
 
+def is_path_clear(robot_pose, target, obstacles, safety_margin=0.06):
+    """
+    Check whether the straight path to a target
+    intersects any circular obstacle.
+
+    robot_pose: (x, y, theta)
+    target: (x, y)
+    obstacles: list of (x, y, radius)
+    safety_margin: additional clearance in meters
+    """
+    x, y, _ = robot_pose
+    tx, ty = target
+
+    dx = tx - x
+    dy = ty - y
+
+    length_squared = dx**2 + dy**2
+
+    if length_squared == 0:
+        return True
+
+    for ox, oy, radius in obstacles:
+
+        # Project obstacle center onto the line segment
+        t = ((ox - x) * dx + (oy - y) * dy) / length_squared
+        t = max(0.0, min(1.0, t))
+
+        # Closest point on the segment
+        closest_x = x + t * dx
+        closest_y = y + t * dy
+
+        distance = math.hypot(
+            ox - closest_x,
+            oy - closest_y
+        )
+
+        if distance < radius + safety_margin:
+            return False
+
+    return True
+
+
 
 if __name__ == "__main__":
 
@@ -100,4 +142,11 @@ if __name__ == "__main__":
     # Calculate motor commands to return to path:
     motors = calculate_return_command(robot_pose, target)
     print("Return motor commands:", motors)
+    
+    obstacles = [(0.35, 0.0, 0.06)]
+
+    print(
+        "Path clear:",
+        is_path_clear(robot_pose, target, obstacles)
+    )
 

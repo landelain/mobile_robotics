@@ -11,6 +11,18 @@ def detect_obstacle(proximity):
     return max(proximity[:5]) > THRESHOLD
 
 
+def detect_front_obstacle(proximity, threshold=2000):
+    """
+    Detect obstacles directly in front of Thymio.
+
+    Sensors:
+    1 = front-left
+    2 = front-center
+    3 = front-right
+    """
+    return max(proximity[1:4]) > threshold
+
+
 def choose_direction(proximity):
     """Turn toward the side with less reflection."""
     left = proximity[0] + proximity[1]
