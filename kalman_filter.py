@@ -7,11 +7,13 @@ from tdmclient import ClientAsync
 
 # thymio data
 
-SPEED_TO_MM_S = 0.32    # [Thymio raw unit -> mm/s] -> tune it on our robot (~0.3-0.4)
-WHEEL_BASE = 95.0   # [mm] -> distance between wheels -> tune it on our robot
+SPEED_TO_MM_S = 0.32    # [Thymio raw unit -> mm/s] -> tune it on our robot (~0.3-0.4) TUNING
+WHEEL_BASE = 95.0   # [mm] -> distance between wheels -> tune it on our robot TUNING
 LOOP_DT = 0.05  # [s] -> target loop period for the filter
 GATE = 11.34    # threshold for innovation -> chi-square (3 DoF) for 99% 
 
+Q_RATE = np.diag([8.30418771, 8.30418771, 0]) # process noise per second TUNING
+MAX_AGE = 0.3 # [s] -> ignore camera frames older than this (at 30fps its reasonable)
 
 # class of the Extended Kalman Filter
 
