@@ -25,13 +25,17 @@ MAX_CORRECTION = 30
 
 FRONT_BLOCKED_THRESHOLD = 2000
 
+SEARCH_MAX_STEPS = 8
+SEARCH_OUTER_SPEED = 40
+SEARCH_INNER_SPEED = 20
 
 class NavigationState(Enum):
     FOLLOW_PATH = 1
     AVOID_OBSTACLE = 2
     FOLLOW_BOUNDARY = 3
     RETURN_TO_PATH = 4
-
+    SEARCH_BOUNDARY = 5
+    STOPPED = 6
 
 class LocalNavigationController:
 
@@ -40,6 +44,7 @@ class LocalNavigationController:
         self.turn_direction = "left"
         self.boundary_side = "right"
         self.rejoin_target = None
+        self.search_steps = 0
 
     def update(
         self,
@@ -116,30 +121,32 @@ class LocalNavigationController:
         # STATE 3: FOLLOW BOUNDARY
         # ---------------------------------
 
+        
+        # STATE 3: FOLLOW BOUNDARY
         elif self.state == NavigationState.FOLLOW_BOUNDARY:
 
             # Front obstacle takes priority
             if max(front) > FRONT_BLOCKED_THRESHOLD:
                 self.state = NavigationState.AVOID_OBSTACLE
 
-            # Return only when external logic approves
+            # External path recovery takes priority when approved
             elif (
                 can_return
                 and robot_pose is not None
                 and global_path
                 and max(front) < CORNER_CLEAR_THRESHOLD
             ):
-
                 self.rejoin_target = find_rejoin_point(
                     robot_pose, global_path
                 )
-
                 self.state = NavigationState.RETURN_TO_PATH
 
-        # ---------------------------------
-        # STATE 4: RETURN TO PATH
-        # ---------------------------------
+            # Lost contact with the obstacle's boundary
+            elif side_sensor < SIDE_LOST_THRESHOLD:
+                self.search_steps = 0
+                self.state = NavigationState.SEARCH_BOUNDARY
 
+        # STATE 4: RETURN TO PATH
         elif self.state == NavigationState.RETURN_TO_PATH:
 
             if detect_obstacle(proximity):
@@ -163,6 +170,25 @@ class LocalNavigationController:
                 ):
                     self.state = NavigationState.FOLLOW_PATH
                     self.rejoin_target = None
+
+         # STATE 5: SEARCH FOR BOUNDARY
+        elif self.state == NavigationState.SEARCH_BOUNDARY:
+
+            # Don't continue searching into a front obstacle
+            if max(front) >= CORNER_CLEAR_THRESHOLD:
+                self.state = NavigationState.STOPPED
+
+            # Successfully found the boundary again
+            elif side_sensor > SIDE_VISIBLE_THRESHOLD:
+                self.search_steps = 0
+                self.state = NavigationState.FOLLOW_BOUNDARY
+
+            else:
+                self.search_steps += 1
+
+                # Stop if the boundary cannot be found
+                if self.search_steps >= SEARCH_MAX_STEPS:
+                    self.state = NavigationState.STOPPED
 
         # ---------------------------------
         # DETERMINE MOTOR COMMANDS
@@ -211,6 +237,25 @@ class LocalNavigationController:
                         BASE_SPEED - correction,
                         BASE_SPEED + correction
                     )
+
+
+        elif self.state == NavigationState.SEARCH_BOUNDARY:
+
+            # Curve gently toward the side where the
+            # obstacle was last detected.
+            if self.boundary_side == "right":
+                command = (
+                    SEARCH_OUTER_SPEED,
+                    SEARCH_INNER_SPEED
+                )
+            else:
+                command = (
+                    SEARCH_INNER_SPEED,
+                    SEARCH_OUTER_SPEED
+                )
+
+        elif self.state == NavigationState.STOPPED:
+            command = (0, 0)
 
         elif self.state == NavigationState.RETURN_TO_PATH:
 

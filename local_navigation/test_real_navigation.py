@@ -135,6 +135,19 @@ with ClientAsync() as client:
                         break
 
 
+                # Safety check during boundary search
+                if state == NavigationState.SEARCH_BOUNDARY:
+
+                    if max(proximity[1:4]) >= 1500:
+                        print("Obstacle during boundary search. STOP.")
+                        break
+
+                # Stop if boundary search has timed out
+                if state == NavigationState.STOPPED:
+                    print("Boundary not recovered. STOP.")
+                    break
+
+                # Limit wheel commands
                 left, right = limit_motor_commands(
                     motors[0],
                     motors[1],
