@@ -12,7 +12,7 @@ MAP_WIDTH = round(TERRAIN_WIDTH_MM * PIXELS_PER_MM)
 MAP_HEIGHT = round(TERRAIN_HEIGHT_MM * PIXELS_PER_MM)
 
 MARKER_ROBOT = 4
-CAMERA_INDEX = 1
+CAMERA_INDEX = 0
 if platform.system() == "Windows":
     CAMERA_BACKEND = cv2.CAP_DSHOW
 elif platform.system() == "Darwin":
@@ -249,6 +249,11 @@ def initialize_vision(capture_new_image=None):
     cv2.imwrite(str(OUTPUT_IMAGE), annotated)
 
 
+def pixel_to_mm(x, y):
+        p = np.float32([[[x, y]]])
+        result = cv2.perspectiveTransform(p, H_mm)[0, 0]
+        return float(result[0]), float(result[1])
+
 def get_obstacles_pose():
     return [len(obstacle_data)] + [
         [(round(float(x), 2), round(float(y), 2)) for x, y in obs['points_mm']]
@@ -264,20 +269,20 @@ def get_initial_thymio_pose():
 
 def get_current_thymio_pose():
     # Each call captures a fresh frame; calibration and obstacles stay unchanged.
-    camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
+    camera = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND)
     if not camera.isOpened():
         camera.release()
-        return None
+        return 1
     try:
         ok, frame = camera.read()
     finally:
         camera.release()
     if not ok:
-        return None
+        return 2
 
     corners, ids, _ = detector.detectMarkers(frame)
     if ids is None or MARKER_ROBOT not in ids.flatten():
-        return None
+        return 3
     idx = int(np.where(ids.flatten() == MARKER_ROBOT)[0][0])
     pts = corners[idx][0]
     x, y = pixel_to_mm(*pts.mean(axis=0))

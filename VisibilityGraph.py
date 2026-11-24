@@ -103,7 +103,6 @@ def path_search(nodes, neighbors, distance, start=0, goal=1):
 # plots final path
 def plot_route(path, obstacles, start, goal, nodes, boundary):
     plot_visibility_graph(obstacles, start, goal, boundary)
-    print(len(path))
     for i in range(len(path) - 1):
         plt.plot([nodes[path[i], 0], nodes[path[i+1], 0]],
                      [nodes[path[i], 1], nodes[path[i+1], 1]],
