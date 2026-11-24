@@ -38,8 +38,8 @@ def calculate_return_command(robot_pose, target):
     """
     Calculate motor commands to drive toward a target.
 
-    robot_pose: (x, y, theta), meters and radians
-    target: (x, y), meters
+    robot_pose: (x_mm, y_mm, theta_rad)
+    target: (x_mm, y_mm)
 
     Returns: (left_speed, right_speed)
     """
@@ -63,13 +63,13 @@ def calculate_return_command(robot_pose, target):
     return left_speed, right_speed
 
 
-def reached_rejoin_point(robot_pose, target, tolerance=0.08):
+def reached_rejoin_point(robot_pose, target, tolerance=80.0):
     """
     Check whether the robot has reached its rejoin point.
 
-    robot_pose: (x, y, theta)
-    target: (x, y)
-    tolerance: acceptable distance in meters
+    robot_pose: (x_mm, y_mm, theta_rad)
+    target: (x_mm, y_mm)
+    tolerance: acceptable distance in millimetres
     """
     x, y, _ = robot_pose
     tx, ty = target
@@ -79,15 +79,15 @@ def reached_rejoin_point(robot_pose, target, tolerance=0.08):
     return distance < tolerance
 
 
-def is_path_clear(robot_pose, target, obstacles, safety_margin=0.06):
+def is_path_clear(robot_pose, target, obstacles, safety_margin=60.0):
     """
     Check whether the straight path to a target
     intersects any circular obstacle.
 
-    robot_pose: (x, y, theta)
-    target: (x, y)
-    obstacles: list of (x, y, radius)
-    safety_margin: additional clearance in meters
+    robot_pose: (x_mm, y_mm, theta_rad)
+    target: (x_mm, y_mm)
+    obstacles: list of (x_mm, y_mm, radius_mm)
+    safety_margin: additional clearance in millimetres
     """
     x, y, _ = robot_pose
     tx, ty = target
@@ -120,33 +120,46 @@ def is_path_clear(robot_pose, target, obstacles, safety_margin=0.06):
 
     return True
 
-
-
 if __name__ == "__main__":
+
+    # All positions and distances use millimetres.
+    # Orientation uses radians.
 
     path = [
         (0.0, 0.0),
-        (0.5, 0.0),
-        (1.0, 0.0),
-        (1.5, 0.0),
-        (2.0, 0.0)
+        (500.0, 0.0),
+        (1000.0, 0.0),
+        (1500.0, 0.0),
+        (2000.0, 0.0)
     ]
 
-    robot_pose = (0.8, 0.3, 0.0)
+    robot_pose = (800.0, 300.0, 0.0)
 
     target = find_rejoin_point(robot_pose, path)
 
-    print("Robot pose:", robot_pose)
-    print("Rejoin point:", target)
+    print("Robot pose (mm):", robot_pose)
+    print("Rejoin point (mm):", target)
 
-    # Calculate motor commands to return to path:
-    motors = calculate_return_command(robot_pose, target)
+    motors = calculate_return_command(
+        robot_pose, target
+    )
+
     print("Return motor commands:", motors)
-    
-    obstacles = [(0.35, 0.0, 0.06)]
+
+    # Example circular obstacle
+    obstacles = [(350.0, 0.0, 60.0)]
 
     print(
         "Path clear:",
         is_path_clear(robot_pose, target, obstacles)
     )
+
+    # Verify arrival at the selected waypoint
+    at_target = (target[0], target[1], 0.0)
+
+    print(
+        "Reached rejoin point:",
+        reached_rejoin_point(at_target, target)
+    )
+
 
