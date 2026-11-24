@@ -11,7 +11,7 @@ boundary = [(0, 0),
 
 # runs Global Navigation
 def run_global_nav(start, goal, raw_obstacles):
-    obstacles = grow_obstacles(raw_obstacles, 115)
+    obstacles = grow_obstacles(raw_obstacles, 60)
     nodes = np.array([start, goal] + [v for ob in obstacles for v in ob])
     neighbors = plot_path_options(nodes, boundary, obstacles)
     distance = map_distances(nodes)
