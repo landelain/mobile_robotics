@@ -11,7 +11,7 @@ MAP_WIDTH = round(TERRAIN_WIDTH_MM * PIXELS_PER_MM)
 MAP_HEIGHT = round(TERRAIN_HEIGHT_MM * PIXELS_PER_MM)
 
 MARKER_ROBOT = 4
-CAMERA_INDEX = 2
+CAMERA_INDEX = 1
 CAPTURE_NEW_IMAGE = False
 IMAGE_PATH = Path('terrain_reference.jpg')
 OUTPUT_IMAGE = Path('navigation_annotated.png')
@@ -20,12 +20,12 @@ ROBOT_LENGTH_MM = 110.0
 ROBOT_WIDTH_MM = 110.0
 ROBOT_EXTRA_MARGIN_MM = 15.0
 MARKER_MARGIN_MM = 10.0
-DARK_THRESHOLD = 115
+DARK_THRESHOLD = 100
 MIN_OBSTACLE_AREA_MM2 = 1000.0
-RECTANGULARITY_MIN = 0.72
-MIN_SIDE_COVERAGE = 0.55
-SIDE_DISTANCE_RATIO = 0.12
-CORNER_DISTANCE_RATIO = 0.10
+RECTANGULARITY_MIN = 0.65
+MIN_SIDE_COVERAGE = 0.40
+SIDE_DISTANCE_RATIO = 0.15
+CORNER_DISTANCE_RATIO = 0.20
 
 aruco = cv2.aruco
 dictionary = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
@@ -60,8 +60,10 @@ def initialize_vision(capture_new_image=None):
             raise RuntimeError('Could not load reference image')
     elif 'img' not in globals() or not isinstance(img, np.ndarray):
         raise FileNotFoundError('No reference image. Set CAPTURE_NEW_IMAGE=True or provide terrain_reference.jpg')
-
-
+    plt.figure(figsize=(11, 7))
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    plt.title('Image de référence — pixels caméra')
+    
     marker_corners, marker_ids, _ = detector.detectMarkers(img)
     marker_shapes = {}
     if marker_ids is not None:
@@ -96,6 +98,45 @@ def initialize_vision(capture_new_image=None):
         [0, 0]
     ])
     H = cv2.getPerspectiveTransform(source, target_px)
+    terrain_corrected = cv2.warpPerspective(
+        img, H, (MAP_WIDTH, MAP_HEIGHT)
+    )
+
+    def map_px_to_mm(x, y):
+        return (
+            float(x * TERRAIN_WIDTH_MM / (MAP_WIDTH - 1)),
+            float((MAP_HEIGHT - 1 - y) * TERRAIN_HEIGHT_MM / (MAP_HEIGHT - 1))
+        )
+
+    exclusion_mask = np.zeros(
+        (MAP_HEIGHT, MAP_WIDTH), dtype=np.uint8
+    )
+
+    # Exclude ArUco markers
+    for pts in marker_shapes.values():
+        pts_map = cv2.perspectiveTransform(
+            pts.reshape(1, 4, 2), H
+        )[0]
+
+        cv2.fillConvexPoly(
+            exclusion_mask,
+            np.rint(pts_map).astype(np.int32),
+            255
+        )
+
+    # Initial robot pose
+    robot_pose = None
+
+    if MARKER_ROBOT in marker_shapes:
+        pts = marker_shapes[MARKER_ROBOT]
+        x, y = pixel_to_mm(*pts.mean(axis=0))
+        fx, fy = pixel_to_mm(*((pts[0] + pts[1]) / 2))
+
+        robot_pose = {
+            'x_mm': x,
+            'y_mm': y,
+            'theta_rad': math.atan2(fy - y, fx - x)
+        }
     # Robot position and direction in rectified image
     robot_pts = marker_shapes[MARKER_ROBOT]
 
@@ -184,7 +225,13 @@ def initialize_vision(capture_new_image=None):
         cx, cy = np.rint(source_obs['center']).astype(int)
         cv2.putText(annotated, f'Obs {obs["id"]}', (int(cx), int(cy)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
+    cv2.imwrite(str(OUTPUT_IMAGE), annotated)
+    plt.figure(figsize=(13,8))
+    plt.imshow(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB))
+    plt.title('Carte annotée — 4 points par obstacle (voir valeurs en mm cellule 7)')
+    plt.axis('off')
+    plt.show()
+    print('Image enregistrée :', OUTPUT_IMAGE.resolve())
     if MARKER_ROBOT in marker_shapes:
         center = cv2.perspectiveTransform(marker_shapes[MARKER_ROBOT].mean(axis=0).reshape(1, 1, 2), H)[0, 0]
         cx, cy = np.rint(center).astype(int)
