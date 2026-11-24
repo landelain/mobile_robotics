@@ -9,13 +9,15 @@ import Vision
 
 # thymio data
 
-SPEED_TO_MM_S = 0.32    # [Thymio raw unit -> mm/s] -> tune it on our robot (~0.3-0.4) TUNING
+SPEED_TO_MM_S = 0.335    # [Thymio raw unit -> mm/s] -> tune it on our robot (~0.3-0.4) TUNING
 WHEEL_BASE = 95.0   # [mm] -> distance between wheels -> tune it on our robot TUNING
 LOOP_DT = 0.05  # [s] -> target loop period for the filter
 GATE = 11.34    # threshold for innovation -> chi-square (3 DoF) for 99% 
 
 Q_RATE = np.diag([8.30418771, 8.30418771, 0]) # process noise per second TUNING
 MAX_AGE = 0.3 # [s] -> ignore camera frames older than this (at 30fps its reasonable)
+
+R_TUNED = np.diag([0.05869203500000153, 0.05094229499999994, 9.027500000000001e-05])
 
 # class of the Extended Kalman Filter
 
@@ -159,7 +161,7 @@ async def start_kalman(cl, nd):
     ekf = EKF(x0=latest["z"],
             P0=np.diag([25, 25, 0.01]),
             Q=np.zeros((3, 3)),
-            R=np.diag([9, 9, 0.005]),
+            R=R_TUNED,
             wheel_base=WHEEL_BASE,
             H=np.eye(3))
     
