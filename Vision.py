@@ -13,7 +13,8 @@ MAP_HEIGHT = round(TERRAIN_HEIGHT_MM * PIXELS_PER_MM)
 
 MARKER_ROBOT = 4
 MARKER_GOAL = 5
-CAMERA_INDEX = 1
+#CHANGE CAMERA INDEX DEPENDING ON COMPUTER
+CAMERA_INDEX = 0
 if platform.system() == "Windows":
     CAMERA_BACKEND = cv2.CAP_DSHOW
 elif platform.system() == "Darwin":
