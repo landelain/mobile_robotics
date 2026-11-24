@@ -3,6 +3,7 @@ import math
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import platform
 
 TERRAIN_WIDTH_MM = 1095.0
 TERRAIN_HEIGHT_MM = 751.0
@@ -12,6 +13,12 @@ MAP_HEIGHT = round(TERRAIN_HEIGHT_MM * PIXELS_PER_MM)
 
 MARKER_ROBOT = 4
 CAMERA_INDEX = 1
+if platform.system() == "Windows":
+    CAMERA_BACKEND = cv2.CAP_DSHOW
+elif platform.system() == "Darwin":
+    CAMERA_BACKEND = cv2.CAP_AVFOUNDATION
+else:
+    CAMERA_BACKEND = cv2.CAP_ANY
 CAPTURE_NEW_IMAGE = False
 IMAGE_PATH = Path('terrain_reference.jpg')
 OUTPUT_IMAGE = Path('navigation_annotated.png')
@@ -40,7 +47,7 @@ def initialize_vision(capture_new_image=None):
         global CAPTURE_NEW_IMAGE
         CAPTURE_NEW_IMAGE = capture_new_image
     if CAPTURE_NEW_IMAGE:
-        camera = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
+        camera = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND)
         if not camera.isOpened():
             camera.release()
             raise RuntimeError('Camera unavailable')
