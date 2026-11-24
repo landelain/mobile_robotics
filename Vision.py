@@ -12,6 +12,7 @@ MAP_WIDTH = round(TERRAIN_WIDTH_MM * PIXELS_PER_MM)
 MAP_HEIGHT = round(TERRAIN_HEIGHT_MM * PIXELS_PER_MM)
 
 MARKER_ROBOT = 4
+MARKER_GOAL = 5
 CAMERA_INDEX = 1
 if platform.system() == "Windows":
     CAMERA_BACKEND = cv2.CAP_DSHOW
@@ -42,7 +43,7 @@ detector = aruco.ArucoDetector(dictionary, aruco.DetectorParameters())
 #this big function takes a picture and computes the positions of everything
 def initialize_vision(capture_new_image=None):
     global img, marker_shapes, H, H_mm, terrain_corrected
-    global obstacle_data, obstacles_px, robot_pose, pixel_to_mm, map_px_to_mm
+    global obstacle_data, obstacles_px, robot_pose, goal_pose, pixel_to_mm, map_px_to_mm
     if capture_new_image is not None:
         global CAPTURE_NEW_IMAGE
         CAPTURE_NEW_IMAGE = capture_new_image
@@ -96,6 +97,18 @@ def initialize_vision(capture_new_image=None):
         p = np.float32([[[x, y]]])
         result = cv2.perspectiveTransform(p, H_mm)[0, 0]
         return float(result[0]), float(result[1])
+    
+    #calculation of goal position
+    goal_pose = None
+
+    if MARKER_GOAL in marker_shapes:
+        pts = marker_shapes[MARKER_GOAL]
+        x, y = pixel_to_mm(*pts.mean(axis=0))
+
+        goal_pose = {
+            'x_mm': x,
+            'y_mm': y
+        }
 
     # Rectified image uses downward-positive image Y.
     target_px = np.float32([
@@ -232,6 +245,20 @@ def initialize_vision(capture_new_image=None):
         cx, cy = np.rint(source_obs['center']).astype(int)
         cv2.putText(annotated, f'Obs {obs["id"]}', (int(cx), int(cy)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+    # show goal
+    if MARKER_GOAL in marker_shapes:
+        center = marker_shapes[MARKER_GOAL].mean(axis=0)
+        center = cv2.perspectiveTransform(
+            center.reshape(1, 1, 2), H
+        )[0, 0]
+
+        cx, cy = np.rint(center).astype(int)
+
+        cv2.circle(annotated, (cx, cy), 7, (255, 0, 0), -1)
+        cv2.putText(annotated, 'Goal', (cx + 10, cy - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+        
     cv2.imwrite(str(OUTPUT_IMAGE), annotated)
     plt.figure(figsize=(13,8))
     plt.imshow(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB))
@@ -261,6 +288,10 @@ def get_initial_thymio_pose():
         return None
     return [round(robot_pose[k], 2) for k in ('x_mm', 'y_mm', 'theta_rad')]
 
+def get_goal_pose():
+    if goal_pose is None:
+        return None
+    return [round(goal_pose[k], 2) for k in ('x_mm', 'y_mm')]
 
 def get_current_thymio_pose():
     # Each call captures a fresh frame; calibration and obstacles stay unchanged.
