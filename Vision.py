@@ -199,7 +199,12 @@ def initialize_vision(capture_new_image=None):
 
     gray = cv2.cvtColor(terrain_corrected, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, binary = cv2.threshold(blurred, DARK_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+    threshold, binary = cv2.threshold(
+        blurred, 0, 255,
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )
+
+    print("Automatic threshold:", threshold)
     binary[exclusion_mask > 0] = 0
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
