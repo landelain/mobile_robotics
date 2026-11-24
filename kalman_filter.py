@@ -121,6 +121,7 @@ async def kalman_loop():
             log["Pdiag"].append(np.diag(ekf.P).copy())
             log["rejected"].append(rejected)
             
+            print(log)
     except Exception as e:
         print("Main loop crashed : ", repr(e))
         raise
