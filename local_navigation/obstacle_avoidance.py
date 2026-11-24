@@ -1,7 +1,7 @@
 # Local Navigation:
 # Initial version: simulated sensor readings
 
-THRESHOLD = 2000
+THRESHOLD = 1600
 BASE_SPEED = 100
 TURN_SPEED = 80
 
