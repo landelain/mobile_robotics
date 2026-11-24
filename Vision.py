@@ -11,7 +11,7 @@ MAP_WIDTH = round(TERRAIN_WIDTH_MM * PIXELS_PER_MM)
 MAP_HEIGHT = round(TERRAIN_HEIGHT_MM * PIXELS_PER_MM)
 
 MARKER_ROBOT = 4
-CAMERA_INDEX = 1
+CAMERA_INDEX = 2
 CAPTURE_NEW_IMAGE = False
 IMAGE_PATH = Path('terrain_reference.jpg')
 OUTPUT_IMAGE = Path('navigation_annotated.png')
