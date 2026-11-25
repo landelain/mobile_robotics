@@ -7,17 +7,23 @@ import Vision
 
 
 
-# thymio data
+# thymio data and variables
 
 SPEED_TO_MM_S = 0.335    # [Thymio raw unit -> mm/s] -> tune it on our robot (~0.3-0.4) TUNING
 WHEEL_BASE = 95.0   # [mm] -> distance between wheels -> tune it on our robot TUNING
 LOOP_DT = 0.05  # [s] -> target loop period for the filter
 GATE = 11.34    # threshold for innovation -> chi-square (3 DoF) for 99% 
 
-Q_RATE = np.diag([8.30418771, 8.30418771, 0]) # process noise per second TUNING
+Q_RATE = np.diag([8.30418771, 8.30418771, 1e-3]) # process noise per second TUNING
 MAX_AGE = 0.3 # [s] -> ignore camera frames older than this (at 30fps its reasonable)
 
 R_TUNED = np.diag([0.05869203500000153, 0.05094229499999994, 9.027500000000001e-05])
+
+
+
+LOG_TIME = 0.2 # [s]
+V_TEST = 20.0  # [mm/s]
+
 
 # class of the Extended Kalman Filter
 
@@ -67,14 +73,22 @@ class EKF:
     
     
 def read_wheels_speed(node):
-    vl = node.v.motor.left.speed * SPEED_TO_MM_S
-    vr = node.v.motor.right.speed * SPEED_TO_MM_S
-    return vl, vr
+    l = node.v.motor.left.speed
+    r = node.v.motor.right.speed
+    if l is None or r is None:
+        return 0.0, 0.0
+    return l * SPEED_TO_MM_S, r * SPEED_TO_MM_S
 
 
-def get_camera_pose():
+# def get_camera_pose():
+#     return Vision.get_current_thymio_pose()
+  
 
-    return Vision.get_current_thymio_pose()
+def get_camera_pose(): # test version
+    t = time.perf_counter() - _t0
+    return np.array([V_TEST * t, 0.0, 0.0])
+    
+    
 
 
 
@@ -82,6 +96,8 @@ def get_camera_pose():
 # =======================================================================================
 
 
+running = False
+cam_running = False
 
 log = None
 last_stamp = None
@@ -95,6 +111,7 @@ async def kalman_loop():
     global last_stamp, running, client, ekf, log, node
     
     t0 = t_prev = time.perf_counter()
+    next_log = 0.0
     
     try:
         while running:
@@ -121,7 +138,12 @@ async def kalman_loop():
             log["Pdiag"].append(np.diag(ekf.P).copy())
             log["rejected"].append(rejected)
             
-            print(log)
+            
+            if t - t0 >= next_log:
+                next_log += LOG_TIME
+                z_str = "none" if z is None else np.round(z, 1)
+                print(f"t={t - t0:.1f}s  x={np.round(ekf.x, 1)}  z={z_str}  rejected={rejected}")
+                
     except Exception as e:
         print("Main loop crashed : ", repr(e))
         raise
@@ -130,13 +152,15 @@ async def kalman_loop():
 
 
 async def start_kalman(cl, nd):
-    global log, running, last_stamp, ekf, latest, client, node
+    global log, running, last_stamp, ekf, latest, client, node, cam_running, _t0    
     
     
     # setting up thymio variables 
     
     client = cl
     node = nd
+    
+    await node.wait_for_variables({"motor.left.speed", "motor.right.speed"})
     
     # camera thread
     
@@ -150,7 +174,9 @@ async def start_kalman(cl, nd):
                 latest["z"] = z
                 latest["t"] = time.perf_counter()
                 latest["stamp"] += 1 
+            time.sleep(1 / 30)   # camera frame rate
 
+    _t0 = time.perf_counter()
     cam_thread = threading.Thread(target=camera_worker, daemon=True)
     cam_thread.start() # thread
 
@@ -178,8 +204,9 @@ async def start_kalman(cl, nd):
     
 async def stop_kalman(task):
     global running, cam_running
-    
     running = False
-    await task              
-    cam_running = False
+    try:
+        await task
+    finally:
+        cam_running = False
     
