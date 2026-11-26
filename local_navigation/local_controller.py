@@ -1,29 +1,33 @@
 
 from enum import Enum
 
-from obstacle_avoidance import detect_obstacle, choose_direction
+from obstacle_avoidance import (
+    CORNER_BLOCKED_THRESHOLD,
+    CORNER_CLEAR_THRESHOLD,
+    FRONT_BLOCKED_THRESHOLD,
+    FRONT_CLEAR_THRESHOLD,
+    SIDE_LOST_THRESHOLD,
+    SIDE_VISIBLE_THRESHOLD,
+    detect_obstacle,
+    choose_direction,
+)
 from path_recovery import (
     find_rejoin_point,
     calculate_return_command,
     reached_rejoin_point
 )
 
-
 # Controller parameters
 BASE_SPEED = 100
 TURN_SPEED = 80
-
-CLEAR_THRESHOLD = 1000
-CORNER_CLEAR_THRESHOLD = 1500
-SIDE_VISIBLE_THRESHOLD = 1000
-SIDE_LOST_THRESHOLD = 300
 
 SIDE_TARGET = 2000
 SIDE_TOLERANCE = 100
 SIDE_GAIN = 0.02
 MAX_CORRECTION = 30
 
-FRONT_BLOCKED_THRESHOLD = 2000
+CORNER_INNER_SPEED = 35
+CORNER_OUTER_SPEED = 55
 
 SEARCH_MAX_STEPS = 8
 SEARCH_OUTER_SPEED = 40
@@ -36,6 +40,7 @@ class NavigationState(Enum):
     RETURN_TO_PATH = 4
     SEARCH_BOUNDARY = 5
     STOPPED = 6
+    CORNER_TURN = 7
 
 class LocalNavigationController:
 
@@ -68,6 +73,10 @@ class LocalNavigationController:
             right_side if self.boundary_side == "right"
             else left_side
         )
+        corner_sensor = (
+            proximity[3] if self.boundary_side == "right"
+            else proximity[1]
+        )
 
         # ---------------------------------
         # STATE 1: FOLLOW ORIGINAL PATH
@@ -95,58 +104,61 @@ class LocalNavigationController:
 
         elif self.state == NavigationState.AVOID_OBSTACLE:
 
-            center_clear = (
-                proximity[2] < CLEAR_THRESHOLD
-            )
+            center_clear = proximity[2] <= FRONT_CLEAR_THRESHOLD
 
-            if self.boundary_side == "right":
-                corner_sensor = proximity[3]
-            else:
-                corner_sensor = proximity[1]
+            corner_blocked = corner_sensor >= CORNER_BLOCKED_THRESHOLD
+            side_visible = side_sensor >= SIDE_VISIBLE_THRESHOLD
 
-            corner_clear = (
-                corner_sensor < CORNER_CLEAR_THRESHOLD
-            )
-
-            side_visible = (
-                side_sensor > SIDE_VISIBLE_THRESHOLD
-            )
-
-            # Turn until obstacle is alongside
-            # and the front corner is sufficiently clear
-            if center_clear and corner_clear and side_visible:
-                self.state = NavigationState.FOLLOW_BOUNDARY
-
-        # ---------------------------------
-        # STATE 3: FOLLOW BOUNDARY
-        # ---------------------------------
-
+            # Once the center is clear and the obstacle is alongside, use a
+            # forward corner arc if the obstacle-side corner is still close.
+            if center_clear and side_visible:
+                self.state = (
+                    NavigationState.CORNER_TURN
+                    if corner_blocked
+                    else NavigationState.FOLLOW_BOUNDARY
+                )
         
         # STATE 3: FOLLOW BOUNDARY
         elif self.state == NavigationState.FOLLOW_BOUNDARY:
 
             # Front obstacle takes priority
-            if max(front) > FRONT_BLOCKED_THRESHOLD:
+            if proximity[2] >= FRONT_BLOCKED_THRESHOLD:
                 self.state = NavigationState.AVOID_OBSTACLE
+
+            elif side_sensor < SIDE_LOST_THRESHOLD:
+                self.search_steps = 0
+                self.state = NavigationState.SEARCH_BOUNDARY
+
+            elif corner_sensor >= CORNER_BLOCKED_THRESHOLD:
+                self.state = NavigationState.CORNER_TURN
 
             # External path recovery takes priority when approved
             elif (
                 can_return
                 and robot_pose is not None
                 and global_path
-                and max(front) < CORNER_CLEAR_THRESHOLD
+                and max(front) <= CORNER_CLEAR_THRESHOLD
             ):
                 self.rejoin_target = find_rejoin_point(
                     robot_pose, global_path
                 )
                 self.state = NavigationState.RETURN_TO_PATH
 
-            # Lost contact with the obstacle's boundary
+
+        # STATE 4: TURN AROUND AN OBSTACLE CORNER
+        elif self.state == NavigationState.CORNER_TURN:
+
+            if proximity[2] >= FRONT_BLOCKED_THRESHOLD:
+                self.state = NavigationState.AVOID_OBSTACLE
+
             elif side_sensor < SIDE_LOST_THRESHOLD:
                 self.search_steps = 0
                 self.state = NavigationState.SEARCH_BOUNDARY
 
-        # STATE 4: RETURN TO PATH
+            elif corner_sensor <= CORNER_CLEAR_THRESHOLD:
+                self.state = NavigationState.FOLLOW_BOUNDARY
+
+        # STATE 5: RETURN TO PATH
         elif self.state == NavigationState.RETURN_TO_PATH:
 
             if detect_obstacle(proximity):
@@ -171,11 +183,11 @@ class LocalNavigationController:
                     self.state = NavigationState.FOLLOW_PATH
                     self.rejoin_target = None
 
-         # STATE 5: SEARCH FOR BOUNDARY
+         # STATE 6: SEARCH FOR BOUNDARY
         elif self.state == NavigationState.SEARCH_BOUNDARY:
 
             # Don't continue searching into a front obstacle
-            if max(front) >= CORNER_CLEAR_THRESHOLD:
+            if max(front) >= FRONT_BLOCKED_THRESHOLD:
                 self.state = NavigationState.STOPPED
 
             # Successfully found the boundary again
@@ -190,10 +202,7 @@ class LocalNavigationController:
                 if self.search_steps >= SEARCH_MAX_STEPS:
                     self.state = NavigationState.STOPPED
 
-        # ---------------------------------
         # DETERMINE MOTOR COMMANDS
-        # ---------------------------------
-
         if self.state == NavigationState.FOLLOW_PATH:
             command = normal_command
 
@@ -254,6 +263,16 @@ class LocalNavigationController:
                     SEARCH_OUTER_SPEED
                 )
 
+        elif self.state == NavigationState.CORNER_TURN:
+
+            # Move forward while turning away from the obstacle-side corner.
+            # This prevents an in-place spin from remaining trapped at a
+            # corner whose front-side sensor is still reporting strongly.
+            if self.boundary_side == "right":
+                command = (CORNER_INNER_SPEED, CORNER_OUTER_SPEED)
+            else:
+                command = (CORNER_OUTER_SPEED, CORNER_INNER_SPEED)
+
         elif self.state == NavigationState.STOPPED:
             command = (0, 0)
 
@@ -271,11 +290,7 @@ class LocalNavigationController:
 
         return self.state, command
 
-
-# ---------------------------------
 # SIMPLE SOFTWARE TEST
-# ---------------------------------
-
 if __name__ == "__main__":
 
     controller = LocalNavigationController()

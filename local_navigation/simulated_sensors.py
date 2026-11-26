@@ -1,4 +1,3 @@
-
 import math
 
 # Approximate front sensor directions (radians)
@@ -12,7 +11,6 @@ SENSOR_ANGLES = [
 
 MAX_RANGE = 0.15  # meters, illustrative
 MAX_READING = 4000
-
 
 def simulate_proximity(robot_pose, obstacles):
     """

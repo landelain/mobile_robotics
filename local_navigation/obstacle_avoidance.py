@@ -1,17 +1,27 @@
 # Local Navigation:
 # Initial version: simulated sensor readings
 
-THRESHOLD = 1600
+OBSTACLE_ENTER_THRESHOLD = 1600
+FRONT_BLOCKED_THRESHOLD = 1600
+FRONT_CLEAR_THRESHOLD = 1200
+CORNER_BLOCKED_THRESHOLD = 1500
+CORNER_CLEAR_THRESHOLD = 1100
+SIDE_VISIBLE_THRESHOLD = 1000
+SIDE_LOST_THRESHOLD = 300
+CRITICAL_PROXIMITY_THRESHOLD = 4500
+
+# Keep the old name available for callers that used the initial detector.
+THRESHOLD = OBSTACLE_ENTER_THRESHOLD
 BASE_SPEED = 100
 TURN_SPEED = 80
 
 
-def detect_obstacle(proximity):
+def detect_obstacle(proximity, threshold=OBSTACLE_ENTER_THRESHOLD):
     """Check the five front proximity sensors."""
-    return max(proximity[:5]) > THRESHOLD
+    return max(proximity[:5]) >= threshold
 
 
-def detect_front_obstacle(proximity, threshold=2000):
+def detect_front_obstacle(proximity, threshold=FRONT_BLOCKED_THRESHOLD):
     """
     Detect obstacles directly in front of Thymio.
 
@@ -20,7 +30,15 @@ def detect_front_obstacle(proximity, threshold=2000):
     2 = front-center
     3 = front-right
     """
-    return max(proximity[1:4]) > threshold
+    return max(proximity[1:4]) >= threshold
+
+
+def is_critical_proximity(
+    proximity,
+    threshold=CRITICAL_PROXIMITY_THRESHOLD
+):
+    """Return whether a reading requires the physical test's emergency stop."""
+    return max(proximity[:5]) >= threshold
 
 
 def choose_direction(proximity):

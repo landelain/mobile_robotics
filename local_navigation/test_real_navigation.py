@@ -1,17 +1,26 @@
-
 from tdmclient import ClientAsync
 from local_controller import (
     LocalNavigationController,
     NavigationState
 )
+from obstacle_avoidance import (
+    CORNER_CLEAR_THRESHOLD,
+    CRITICAL_PROXIMITY_THRESHOLD,
+    FRONT_BLOCKED_THRESHOLD,
+    FRONT_CLEAR_THRESHOLD,
+    SIDE_LOST_THRESHOLD,
+    SIDE_VISIBLE_THRESHOLD,
+    is_critical_proximity,
+)
 
 # Conservative settings for first physical test
-MAX_SPEED = 50
-FORWARD_SPEED = 35
-CRITICAL_THRESHOLD = 4500
+MAX_SPEED = 200
+FORWARD_SPEED = 150
+CRITICAL_THRESHOLD = CRITICAL_PROXIMITY_THRESHOLD
 DT = 0.1
-MAX_STEPS = 80  # 5 seconds
+MAX_STEPS = 600  # 60 seconds
 MAX_TURN_STEPS = 15  # Limit continuous turning
+MAX_CORNER_STEPS = 30  # Bound a corner arc if the sensor never clears
 
 def limit_motor_commands(left, right, max_speed=50):
     """
@@ -55,6 +64,7 @@ with ClientAsync() as client:
             print("Starting supervised navigation test.")
 
             turn_steps = 0
+            corner_steps = 0
             avoidance_started = False
 
             for step in range(MAX_STEPS):
@@ -62,13 +72,14 @@ with ClientAsync() as client:
                 await client.sleep(DT)
 
                 proximity = list(node.v.prox.horizontal)
+                print(f"Sensors: {proximity[:5]}")
 
                 # Diagnostic: assess readiness for boundary following
-                center_clear = proximity[2] < 1000
-                side_visible = proximity[4] > 1000
+                center_clear = proximity[2] <= FRONT_CLEAR_THRESHOLD
+                side_visible = proximity[4] >= SIDE_VISIBLE_THRESHOLD
 
                 # Conservative front-corner clearance
-                front_clear = max(proximity[1:4]) < 1500
+                front_clear = max(proximity[1:4]) <= CORNER_CLEAR_THRESHOLD
 
                 if controller.state == NavigationState.AVOID_OBSTACLE:
                     print(
@@ -78,7 +89,7 @@ with ClientAsync() as client:
                     )
 
                 # Emergency proximity stop
-                if max(proximity[:5]) >= CRITICAL_THRESHOLD:
+                if is_critical_proximity(proximity, CRITICAL_THRESHOLD):
                     print("Critical proximity! STOP.")
                     break
 
@@ -105,6 +116,14 @@ with ClientAsync() as client:
                 else:
                     turn_steps = 0
 
+                if state == NavigationState.CORNER_TURN:
+                    corner_steps += 1
+                    if corner_steps >= MAX_CORNER_STEPS:
+                        print("Corner-turn timeout. STOP.")
+                        break
+                else:
+                    corner_steps = 0
+
                 # Don't drive blindly after losing the boundary
                 if state == NavigationState.FOLLOW_BOUNDARY:
                     side_index = (
@@ -112,33 +131,26 @@ with ClientAsync() as client:
                         else 0
                     )
 
-                    if proximity[side_index] < 300:
+                    if proximity[side_index] < SIDE_LOST_THRESHOLD:
                         print("Boundary lost. STOP.")
                         break
-                
-                # Safety gate for forward motion during boundary following
-                if state == NavigationState.FOLLOW_BOUNDARY:
 
-                    # Central sensor must be clear
-                    if proximity[2] >= 1000:
-                        print("Center obstacle detected. STOP.")
-                        break
-
-                    # Check the front corner on the obstacle side
-                    corner_index = (
-                        3 if controller.boundary_side == "right"
-                        else 1
-                    )
-
-                    if proximity[corner_index] >= 1500:
-                        print("Front corner not clear. STOP.")
-                        break
+                # The controller handles ordinary front/corner readings by
+                # transitioning to AVOID_OBSTACLE or CORNER_TURN. Keep a
+                # fail-safe invariant for an unexpected blocked center while
+                # still allowing the controlled corner arc to proceed.
+                if (
+                    state == NavigationState.FOLLOW_BOUNDARY
+                    and proximity[2] >= FRONT_BLOCKED_THRESHOLD
+                ):
+                    print("Unexpected center blockage. STOP.")
+                    break
 
 
                 # Safety check during boundary search
                 if state == NavigationState.SEARCH_BOUNDARY:
 
-                    if max(proximity[1:4]) >= 1500:
+                    if max(proximity[1:4]) >= FRONT_BLOCKED_THRESHOLD:
                         print("Obstacle during boundary search. STOP.")
                         break
 

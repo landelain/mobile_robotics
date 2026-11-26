@@ -1,6 +1,4 @@
-
 import math
-
 
 def find_rejoin_point(robot_pose, global_path):
     """
@@ -62,7 +60,6 @@ def calculate_return_command(robot_pose, target):
 
     return left_speed, right_speed
 
-
 def reached_rejoin_point(robot_pose, target, tolerance=80.0):
     """
     Check whether the robot has reached its rejoin point.
@@ -77,7 +74,6 @@ def reached_rejoin_point(robot_pose, target, tolerance=80.0):
     distance = math.hypot(tx - x, ty - y)
 
     return distance < tolerance
-
 
 def is_path_clear(robot_pose, target, obstacles, safety_margin=60.0):
     """
