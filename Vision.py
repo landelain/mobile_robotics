@@ -29,7 +29,7 @@ ROBOT_LENGTH_MM = 110.0
 ROBOT_WIDTH_MM = 110.0
 ROBOT_EXTRA_MARGIN_MM = 15.0
 MARKER_MARGIN_MM = 10.0
-DARK_THRESHOLD = 45
+DARK_THRESHOLD = 150 
 MIN_OBSTACLE_AREA_MM2 = 1000.0
 RECTANGULARITY_MIN = 0.65
 MIN_SIDE_COVERAGE = 0.40
@@ -204,7 +204,7 @@ def initialize_vision(capture_new_image=None):
         blurred, DARK_THRESHOLD, 255, cv2.THRESH_BINARY_INV
     )
 
-    print("Automatic threshold:", threshold)
+    print("Automatic threshold:", DARK_THRESHOLD)
     binary[exclusion_mask > 0] = 0
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))

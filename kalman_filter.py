@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 from tdmclient import ClientAsync
 import asyncio, threading, time
-import Vision
 
 
 
@@ -11,7 +10,7 @@ import Vision
 
 SPEED_TO_MM_S = 0.335    # [Thymio raw unit -> mm/s] -> tune it on our robot (~0.3-0.4) TUNING
 WHEEL_BASE = 95.0   # [mm] -> distance between wheels -> tune it on our robot TUNING
-LOOP_DT = 0.05  # [s] -> target loop period for the filter
+LOOP_DT = 0.01  # [s] -> target loop period for the filter
 GATE = 11.34    # threshold for innovation -> chi-square (3 DoF) for 99% 
 
 Q_RATE = np.diag([8.30418771, 8.30418771, 1e-3]) # process noise per second TUNING
@@ -21,7 +20,7 @@ R_TUNED = np.diag([0.05869203500000153, 0.05094229499999994, 9.027500000000001e-
 
 
 
-LOG_TIME = 0.2 # [s]
+LOG_TIME = 0.1 # [s]
 V_TEST = 20.0  # [mm/s]
 
 
@@ -80,10 +79,7 @@ def read_wheels_speed(node):
     return l * SPEED_TO_MM_S, r * SPEED_TO_MM_S
 
 
-# def get_camera_pose():
-#     return Vision.get_current_thymio_pose()
   
-
 def get_camera_pose(): # test version
     t = time.perf_counter() - _t0
     return np.array([V_TEST * t, 0.0, 0.0])
@@ -115,7 +111,7 @@ async def kalman_loop():
     
     try:
         while running:
-            await client.sleep(LOOP_DT)
+            await asyncio.sleep(LOOP_DT)
             t = time.perf_counter()
             dt, t_prev = t - t_prev, t
 
@@ -137,12 +133,14 @@ async def kalman_loop():
             log["z"].append(z if z is not None else np.full(3, np.nan))
             log["Pdiag"].append(np.diag(ekf.P).copy())
             log["rejected"].append(rejected)
+            log["vl"].append(v_l)
+            log["vr"].append(v_r)
             
             
-            if t - t0 >= next_log:
-                next_log += LOG_TIME
-                z_str = "none" if z is None else np.round(z, 1)
-                print(f"t={t - t0:.1f}s  x={np.round(ekf.x, 1)}  z={z_str}  rejected={rejected}")
+            # if t - t0 >= next_log:
+            #     next_log += LOG_TIME
+            #     z_str = "none" if z is None else np.round(z, 1)
+            #     print(f"t={t - t0:.1f}s  x={np.round(ekf.x, 1)}  z={z_str}  rejected={rejected}")
                 
     except Exception as e:
         print("Main loop crashed : ", repr(e))
@@ -164,21 +162,28 @@ async def start_kalman(cl, nd):
     
     # camera thread
     
-    latest = {"z": None, "stamp": 0, "t": 0.0} 
+    # latest = {"z": None, "stamp": 0, "t": 0.0} 
+    _t0 = time.perf_counter()
+    latest = {"z": get_camera_pose(), "stamp": 0, "t": 0.0} 
+    
     cam_running = True
 
-    def camera_worker():
-        while cam_running:
-            z = get_camera_pose()
-            if z is not None:
-                latest["z"] = z
-                latest["t"] = time.perf_counter()
-                latest["stamp"] += 1 
-            time.sleep(1 / 30)   # camera frame rate
+    # def camera_worker():
+    #     import Vision
+    #     while cam_running:
+    #         # z = Vision.get_current_thymio_pose()
+    #         z = get_camera_pose()
+    #         if z is not None:
+    #             latest["z"] = z
+    #             latest["t"] = time.perf_counter()
+    #             latest["stamp"] += 1 
+    #         time.sleep(1)
+    #         # time.sleep(1 / 30)   # camera frame rate
 
-    _t0 = time.perf_counter()
-    cam_thread = threading.Thread(target=camera_worker, daemon=True)
-    cam_thread.start() # thread
+    # _t0 = time.perf_counter()
+    # cam_thread = threading.Thread(target=camera_worker, daemon=True)
+    # cam_thread.start() # thread
+
 
     # initialize filter 
 
@@ -193,7 +198,7 @@ async def start_kalman(cl, nd):
             H=np.eye(3))
     
     running = True
-    log = {"t": [], "x": [], "z": [], "Pdiag": [], "rejected": []}
+    log = {"t": [], "x": [], "z": [], "Pdiag": [], "rejected": [], "vl" : [], "vr" : []}
     last_stamp = 0
     
     # launch main loop
@@ -204,9 +209,11 @@ async def start_kalman(cl, nd):
     
 async def stop_kalman(task):
     global running, cam_running
+    
     running = False
     try:
         await task
     finally:
         cam_running = False
     
+    return log
