@@ -36,6 +36,23 @@ MIN_SIDE_COVERAGE = 0.40
 SIDE_DISTANCE_RATIO = 0.15
 CORNER_DISTANCE_RATIO = 0.20
 
+camera = None
+
+def start_camera():
+    global camera
+
+    if camera is not None and camera.isOpened():
+        return
+
+    camera = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND)
+
+    if not camera.isOpened():
+        camera.release()
+        camera = None
+        raise RuntimeError("Camera unavailable")
+
+
+
 aruco = cv2.aruco
 dictionary = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
 detector = aruco.ArucoDetector(dictionary, aruco.DetectorParameters())
@@ -305,26 +322,28 @@ def get_goal_pose():
     return [round(goal_pose[k], 2) for k in ('x_mm', 'y_mm')]
 
 def get_current_thymio_pose():
-    # Each call captures a fresh frame; calibration and obstacles stay unchanged.
-    camera = cv2.VideoCapture(CAMERA_INDEX, CAMERA_BACKEND)
-    if not camera.isOpened():
-        camera.release()
-        return 1
-    try:
-        ok, frame = camera.read()
-    finally:
-        camera.release()
+    if camera is None or not camera.isOpened():
+        return None
+
+    ok, frame = camera.read()
+
     if not ok:
-        return 2
+        return None
 
     corners, ids, _ = detector.detectMarkers(frame)
+
     if ids is None or MARKER_ROBOT not in ids.flatten():
-        return 3
+        return None
+
     idx = int(np.where(ids.flatten() == MARKER_ROBOT)[0][0])
     pts = corners[idx][0]
+
     x, y = pixel_to_mm(*pts.mean(axis=0))
     fx, fy = pixel_to_mm(*((pts[0] + pts[1]) / 2))
-    return [round(x, 2), round(y, 2), round(math.atan2(fy - y, fx - x), 2)]
+
+    theta = math.atan2(fy - y, fx - x)
+
+    return [round(x, 2), round(y, 2), round(theta, 2)]
 
 def show_thymio_goal():
     fig, ax = plt.subplots(figsize=(13, 8))
@@ -387,3 +406,10 @@ def show_thymio_goal():
     ax.set_title('Thymio and Goal positions')
     ax.set_aspect('equal')
     plt.show()
+
+def stop_camera():
+    global camera
+
+    if camera is not None:
+        camera.release()
+        camera = None
