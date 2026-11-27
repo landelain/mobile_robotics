@@ -19,8 +19,8 @@ MAX_AGE = 0.3 # [s] -> ignore camera frames older than this (at 30fps its reason
 R_TUNED = np.diag([0.05869203500000153, 0.05094229499999994, 9.027500000000001e-05])
 
 
-
-LOG_TIME = 0.1 # [s]
+LOG_BOOL = True
+LOG_TIME = 0.05 # [s]
 V_TEST = 20.0  # [mm/s]
 
 
@@ -137,10 +137,11 @@ async def kalman_loop():
             log["vr"].append(v_r)
             
             
-            # if t - t0 >= next_log:
-            #     next_log += LOG_TIME
-            #     z_str = "none" if z is None else np.round(z, 1)
-            #     print(f"t={t - t0:.1f}s  x={np.round(ekf.x, 1)}  z={z_str}  rejected={rejected}")
+            if LOG_BOOL and (t - t0 >= next_log):
+                next_log = (t - t0) + LOG_TIME
+                # next_log += LOG_TIME
+                z_str = "none" if z is None else np.round(z, 1)
+                print(f"t={t - t0:.3f}s  x={np.round(ekf.x, 1)}  z={z_str}  rejected={rejected}")
                 
     except Exception as e:
         print("Main loop crashed : ", repr(e))
@@ -162,27 +163,26 @@ async def start_kalman(cl, nd):
     
     # camera thread
     
-    # latest = {"z": None, "stamp": 0, "t": 0.0} 
-    _t0 = time.perf_counter()
-    latest = {"z": get_camera_pose(), "stamp": 0, "t": 0.0} 
+    latest = {"z": None, "stamp": 0, "t": 0.0} 
+    # latest = {"z": np.array([0, 0, 0]), "stamp": 0, "t": 0.0} 
     
     cam_running = True
 
-    # def camera_worker():
-    #     import Vision
-    #     while cam_running:
-    #         # z = Vision.get_current_thymio_pose()
-    #         z = get_camera_pose()
-    #         if z is not None:
-    #             latest["z"] = z
-    #             latest["t"] = time.perf_counter()
-    #             latest["stamp"] += 1 
-    #         time.sleep(1)
-    #         # time.sleep(1 / 30)   # camera frame rate
+    def camera_worker():
+        import Vision
+        while cam_running:
+            # z = Vision.get_current_thymio_pose()
+            z = get_camera_pose()
+            if z is not None:
+                latest["z"] = z
+                latest["t"] = time.perf_counter()
+                latest["stamp"] += 1 
+            time.sleep(1)
+            # time.sleep(1 / 30)   # camera frame rate
 
-    # _t0 = time.perf_counter()
-    # cam_thread = threading.Thread(target=camera_worker, daemon=True)
-    # cam_thread.start() # thread
+    _t0 = time.perf_counter()
+    cam_thread = threading.Thread(target=camera_worker, daemon=True)
+    cam_thread.start() # thread
 
 
     # initialize filter 
