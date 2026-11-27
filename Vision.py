@@ -29,7 +29,7 @@ ROBOT_LENGTH_MM = 110.0
 ROBOT_WIDTH_MM = 110.0
 ROBOT_EXTRA_MARGIN_MM = 15.0
 MARKER_MARGIN_MM = 10.0
-DARK_THRESHOLD = 150
+DARK_THRESHOLD = 45
 MIN_OBSTACLE_AREA_MM2 = 1000.0
 RECTANGULARITY_MIN = 0.65
 MIN_SIDE_COVERAGE = 0.40
@@ -199,9 +199,9 @@ def initialize_vision(capture_new_image=None):
 
     gray = cv2.cvtColor(terrain_corrected, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    threshold, binary = cv2.threshold(
-        blurred, 0, 255,
-        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+
+    _, binary = cv2.threshold(
+        blurred, DARK_THRESHOLD, 255, cv2.THRESH_BINARY_INV
     )
 
     print("Automatic threshold:", threshold)
@@ -325,3 +325,65 @@ def get_current_thymio_pose():
     x, y = pixel_to_mm(*pts.mean(axis=0))
     fx, fy = pixel_to_mm(*((pts[0] + pts[1]) / 2))
     return [round(x, 2), round(y, 2), round(math.atan2(fy - y, fx - x), 2)]
+
+def show_thymio_goal():
+    fig, ax = plt.subplots(figsize=(13, 8))
+
+    ax.imshow(
+        cv2.cvtColor(terrain_corrected, cv2.COLOR_BGR2RGB),
+        extent=[0, TERRAIN_WIDTH_MM, 0, TERRAIN_HEIGHT_MM]
+    )
+
+    # Thymio position and orientation
+    if robot_pose is not None:
+        x = robot_pose['x_mm']
+        y = robot_pose['y_mm']
+        theta = robot_pose['theta_rad']
+
+        ax.plot(x, y, 'ro', markersize=8)
+
+        ax.arrow(
+            x, y,
+            80 * math.cos(theta),
+            80 * math.sin(theta),
+            color='red',
+            width=3,
+            head_width=18,
+            length_includes_head=True
+        )
+
+        ax.annotate(
+            f'Thymio\n'
+            f'x = {x:.1f} mm\n'
+            f'y = {y:.1f} mm\n'
+            f'Angle = {theta:.2f} rad ({math.degrees(theta):.1f}°)',
+            (x, y),
+            xytext=(15, 15),
+            textcoords='offset points',
+            color='red',
+            bbox=dict(facecolor='white', alpha=0.85)
+        )
+
+    # Goal position
+    if goal_pose is not None:
+        x = goal_pose['x_mm']
+        y = goal_pose['y_mm']
+
+        ax.plot(x, y, 'bo', markersize=8)
+
+        ax.annotate(
+            f'Goal\n'
+            f'x = {x:.1f} mm\n'
+            f'y = {y:.1f} mm',
+            (x, y),
+            xytext=(15, 15),
+            textcoords='offset points',
+            color='blue',
+            bbox=dict(facecolor='white', alpha=0.85)
+        )
+
+    ax.set_xlabel('X [mm]')
+    ax.set_ylabel('Y [mm]')
+    ax.set_title('Thymio and Goal positions')
+    ax.set_aspect('equal')
+    plt.show()
